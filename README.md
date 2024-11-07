@@ -34,7 +34,7 @@ configParamsWG.wlanPHY          = erase(signalFormat, ["20","40","80","160","320
 configParamsWG.bw               = erase(signalFormat, ["HT","VHT","EHT","HE"])+"MHz"; % wv bandwidth
 configParamsWG.NumUsers         = 1; % MIMO number of users
 configParamsWG.MCS              = MCS_index; % mcs index
- if isMIMO
+if isMIMO
     configParamsWG.NumSpaceTimeStreams  = 2; %[1 1];
     configParamsWG.NumTransmitAntennas  = 2; %2;
 else
@@ -67,3 +67,53 @@ configParamsWG.fileFormat   = "TXT_ADS";
 configParamsWG.wlanBand     = "5GHz";
 configParamsWG.note         = "";
 ```
+### Generate WIFI Waveform
+```matlab
+% run
+configWG = ovwrConfig(waveformGenWLAN,configParamsWG); % get wv configurations
+passParams = waveformGenWLAN.runWG(configWG); % get wv parameters
+wv = powerDbm(wv,'set',paOutputPower_target_dBm,'dBm',dlSlots); % set transmitter power
+```
+|**ACLR**  |**Timing**  |**CCDF**|
+|:--:|:--:|:--:|
+| ![Image 1](https://github.com/user-attachments/assets/904f4054-8a8c-43ca-927a-a884c6efb7a9) | ![Image 2](https://github.com/user-attachments/assets/c1d62df2-7b45-464a-b53c-3dcbb1cde898) |![Image 3](https://github.com/user-attachments/assets/d649dd1c-a2d0-4fe5-aea9-5bb376667daf) |
+### Transmitter -  Apply Noise - Before PA
+```matlab
+isNoiseFloorBeforePA = 0; % set noise floor to signal before PA
+n0_dBmHz_set = -150 % set noise psd in dBm/Hz
+% run
+[wvNoise, noise0] = rfSim_noise(wv, 'NoisePowerDbmHz', n0_dBmHz_set, fs); % create noise wv
+```
+### Transmitter - Characterize PA and Signal
+```matlab
+paLinearGain_dB = 34.8; % set pa linear gain in dB
+% run multi-stages pa lut
+[lut_mx1, LookupTable1] = paLookupTable_process('paData.xlsx','0614SIMCW1M',[-50,50],[],1); % get pa1 lut from excel
+[lut_mx2, LookupTable2] = paLookupTable_process('paData.xlsx','0614SIMCW2M',[-50,50],[],1); % get pa2 lut from excel
+[lut_mx3, LookupTable3] = paLookupTable_process('paData.xlsx','0614SIMCW3M',[-50,50],[],1); % get pa3 lut from excel
+```
+### Transmitter -  Generate PA Signal and Tuning to Target Output Power
+```matlab
+paOutputPower_tolerance_dB = 0.2; % set pa output power tolerance
+% run
+[paSignal, paSignal_info_stages, paSignal_stages] = rfSim_pa_stages(paInSignal,'RFSIM',paModel,dlSlots); % generate pa output wv
+```
+### Transmitter - Flatness - After PA
+```matlab
+paFlatnessMax_dB    = 2 % set max flatness
+paFlatFreqMHz       = cbw/2/1e6 * [0:1:configParamsWG.osr]; % implement flat. freq. vector in MHz
+paFlatMagnDb        = -paFlatnessMax_dB * [0:1:configParamsWG.osr] + paFlatnessMax_dB/2; % implement flat. mag. vector in Db
+nTapsRange_paFlat   = 10e3; % set range of taps for flat. fir
+% run
+[paSignalFlat, b_paFlat] = rfSim_fltaness(paSignal, fs, paFlatMagnDb, paFlatFreqMHz, nTapsRange_paFlat); % set wv with flatness
+```
+### Transmitter - wlanDemodulation and Measurements
+```matlab
+% run
+demod_finalSignal = wlanDemodulation(passParams.finalSignal, passParams, 'tx') % demodulate wv
+```
+### Transmitter - Summary
+
+
+
+
